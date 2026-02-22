@@ -117,3 +117,44 @@
     - http_proxy: "{{ global_configuration.HTTP_PROXY if global_configuration.HTTP_PROXY is defined else contrail_configuration.HTTP_PROXY | default('') }}"
     - "{{ contrail_ansible_environment | default({}) }}"
   tags: always
+
+- name: Initialize vRouter on compute nodes
+  hosts: vrouter
+  gather_facts: no
+  become: yes
+  # On NIPA Cloud, secondary interfaces (eth1) do not receive a DHCP address
+  # automatically at boot. vRouter binds vhost0 to the physical interface
+  # specified in instances.yaml (eth1 in the standard NIPA topology) — if that
+  # interface has no IP, the bind fails silently and the agent never establishes
+  # an XMPP session with the control plane.
+  # The kernel module must also be cycled to ensure it picks up the current
+  # docker-compose configuration.
+  tasks:
+    - name: Request DHCP address on eth1
+      ansible.builtin.command: dhclient eth1
+      changed_when: false
+
+    - name: Reload vrouter kernel module
+      ansible.builtin.shell: |
+        modprobe -r vrouter || true
+        modprobe vrouter
+      changed_when: false
+
+    - name: Restart vRouter containers
+      ansible.builtin.shell: |
+        docker compose down && docker compose up -d
+      args:
+        chdir: /etc/contrail/vrouter
+
+    - name: Wait for vRouter services to initialize
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Collect contrail-status output
+      ansible.builtin.command: contrail-status
+      register: contrail_status_result
+      changed_when: false
+
+    - name: Display contrail-status
+      ansible.builtin.debug:
+        var: contrail_status_result.stdout_lines
