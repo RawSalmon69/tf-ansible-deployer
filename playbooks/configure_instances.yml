@@ -18,6 +18,28 @@
   vars_files:
     - "{{ config_file }}"
 
+- name: Verify OS hostnames match instances.yaml inventory keys
+  hosts: container_hosts
+  gather_facts: yes
+  # This play must run before configuration begins.
+  # On NIPA Cloud, a mismatch between the OS hostname and the instances.yaml
+  # key causes RabbitMQ to form an incorrect node name at cluster formation time,
+  # resulting in a crash-loop that requires a full redeploy to resolve.
+  tasks:
+    - name: Fail if OS hostname does not match inventory hostname
+      ansible.builtin.fail:
+        msg: |
+          Hostname mismatch detected on {{ inventory_hostname }}.
+          OS hostname   : {{ ansible_hostname }}
+          Expected      : {{ inventory_hostname }}
+
+          Resolve by running on the affected node:
+            hostnamectl set-hostname {{ inventory_hostname }}
+          Then re-run this playbook from the beginning.
+      when: ansible_hostname != inventory_hostname
+  vars_files:
+    - "{{ hostvars['localhost'].config_file }}"
+
 - name: Configure instance(s)
   hosts: container_hosts
   gather_facts: yes
