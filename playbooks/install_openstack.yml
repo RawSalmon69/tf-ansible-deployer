@@ -173,4 +173,40 @@
     action: deploy
     kolla_action: deploy
 
-- import_playbook: "{{ playbook_dir }}/../../contrail-kolla-ansible/ansible/post-deploy-contrail.yml" 
+# Disabled: post-deploy-contrail.yml is not compatible with ansible-core >=2.15.
+# The 'extensions' parameter of include_vars no longer accepts a list value,
+# which causes all include_vars tasks in that playbook to fail at runtime.
+# The post-deploy step is documented in the README under "After Installation"
+# and should be run manually from /root/contrail-kolla-ansible.
+#
+# - import_playbook: "{{ playbook_dir }}/../../contrail-kolla-ansible/ansible/post-deploy-contrail.yml"
+
+- name: Correct noVNC proxy URL on compute nodes
+  hosts: compute
+  gather_facts: no
+  become: yes
+  # Kolla sets novncproxy_base_url to the controller's internal IP address.
+  # On NIPA Cloud, users reach the console through the controller's floating IP,
+  # so the URL must be updated before noVNC sessions will work.
+  # Pass the floating IP at runtime with: -e novnc_public_ip=<FLOATING_IP>
+  pre_tasks:
+    - name: Verify novnc_public_ip is defined
+      ansible.builtin.fail:
+        msg: >
+          Required variable 'novnc_public_ip' is not set.
+          Re-run with: -e novnc_public_ip=<CONTROLLER_FLOATING_IP>
+      when: novnc_public_ip is not defined or novnc_public_ip | length == 0
+  tasks:
+    - name: Replace internal controller IP with public IP in nova.conf
+      ansible.builtin.replace:
+        path: /etc/kolla/nova-compute/nova.conf
+        regexp: '(novncproxy_base_url\s*=\s*http://)[^:]+(:.*)'
+        replace: '\g<1>{{ novnc_public_ip }}\g<2>'
+      notify: Restart nova_compute
+
+  handlers:
+    - name: Restart nova_compute
+      community.docker.docker_container:
+        name: nova_compute
+        state: started
+        restart: yes
