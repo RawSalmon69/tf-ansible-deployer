@@ -1,0 +1,38 @@
+---
+- name: Prepare Host for tf-ansible-deployer
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Ensure .ssh directory exists and has correct permissions
+      ansible.builtin.file:
+        path: "/root/.ssh"
+        state: directory
+        mode: '0700'
+
+    - name: Add public key to authorized_keys
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+          - python3-venv
+        state: present
+        update_cache: yes
+
+    - name: Create a virtual environment for docker-py
+      ansible.builtin.command: >
+        python3 -m venv --system-site-packages /opt/kollaenv
+      args:
+        creates: /opt/kollaenv/bin/activate
+
+    - name: Install docker-py into /opt/kollaenv
+      ansible.builtin.pip:
+        name:
+          - docker<7
+        virtualenv: /opt/kollaenv
