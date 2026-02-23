@@ -15,7 +15,7 @@ source /opt/kolla-deploy-env/bin/activate
 
 echo "[3/5] Installing Python packages"
 pip3 install \
-  'ansible-core>=2.15,<2.17' \
+  'ansible-core>=2.17,<2.19' \
   'kolla-ansible==20.3.0' \
   'requests<2.32'
 
