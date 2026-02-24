@@ -32,18 +32,25 @@
           - python3
           - python3-pip
           - python3-venv
-          - python3-distutils
+          - libdbus-1-dev
+          - pkg-config
+          - libglib2.0-dev
+          - cmake
+          - build-essential
         state: present
         update_cache: yes
 
-    - name: Create a virtual environment for docker-py
+    - name: Recreate clean kolla virtualenv (no system packages)
       ansible.builtin.command: >
-        python3 -m venv --system-site-packages /opt/kollaenv
+        python3 -m venv /opt/kollaenv
       args:
         creates: /opt/kollaenv/bin/activate
 
-    - name: Install docker-py into /opt/kollaenv
+    - name: Install required python packages for kolla
       ansible.builtin.pip:
         name:
-          - docker<7
+          - docker==5.0.3
+          - requests==2.31.0
+          - urllib3==1.26.18
+          - dbus-python
         virtualenv: /opt/kollaenv
